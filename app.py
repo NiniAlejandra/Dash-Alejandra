@@ -12,82 +12,102 @@ app = dash.Dash(__name__)
 
 # Layout del tablero
 app.layout = html.Div([
-    html.H1("Tablero de Hurtos de Luminarias", style={'textAlign': 'center'}),
-
-    # Filtro de año
     html.Div([
-        html.Label("Seleccione el año:", style={'fontSize': '20px', 'marginBottom': '10px'}),
-        dcc.Dropdown(
-            id='year-dropdown',
-            options=[{'label': year, 'value': year} for year in df['AÑO'].unique()],
-            value=[df['AÑO'].unique()[0]],  # Valor inicial
-            multi=True,  # Permite selección múltiple
-            clearable=False,
-            style={'width': '100%', 'marginBottom': '20px'}
-        ),
-    ], style={'width': '100%', 'padding': '10px'}),
+        html.H1("Tablero de Hurtos de Luminarias 2022-2025", style={'textAlign': 'center'}),
+        
+        # Filtro de año
+        html.Div([
+            html.Label("Seleccione el año:", style={'fontSize': '20px', 'marginBottom': '10px'}),
+            dcc.Dropdown(
+                id='year-dropdown',
+                options=[{'label': year, 'value': year} for year in df['AÑO'].unique()],
+                value=[df['AÑO'].unique()[0]],
+                multi=True,
+                clearable=False,
+                style={'width': '100%', 'marginBottom': '20px'}
+            ),
+        ], style={'width': '100%', 'padding': '10px'}),
 
-    # Gráficos
-    html.Div([
-        dcc.Graph(id='bar-chart'),
-        dcc.Graph(id='map', style={'height': '600px'})  # Aumentamos la altura del mapa
-    ], style={'width': '100%', 'padding': '10px'})
+        # Gráficos
+        html.Div([
+            dcc.Graph(id='bar-chart'),
+            dcc.Graph(id='map', style={'height': '600px'})
+        ], style={'width': '100%', 'padding': '10px'}),
+    ], style={'paddingBottom': '50px'}),
+
+    # Footer
+    html.Div(
+        "© 2025 - ESIP SAS ESP - Todos los derechos Reservados- Desarrollado por Alejandra Valderrama",
+        style={
+            'position': 'fixed',
+            'bottom': '10px',
+            'right': '20px',
+            'color': '#555',
+            'fontSize': '14px',
+            'backgroundColor': 'rgba(255, 255, 255, 0.7)',
+            'padding': '5px 10px',
+            'borderRadius': '5px'
+        }
+    )
 ])
 
-# Callbacks para actualizar los gráficos
+# Callback modificado para el mapa
 @app.callback(
     [Output('bar-chart', 'figure'),
      Output('map', 'figure')],
     [Input('year-dropdown', 'value')]
 )
 def update_graphs(selected_years):
-    # Filtrar el DataFrame por los años seleccionados
     filtered_df = df[df['AÑO'].isin(selected_years)]
-
-    # Gráfico de barras (hurtos por mes)
+    
+    # Gráfico de barras (sin cambios)
     bar_fig = px.bar(
         filtered_df,
         x='Mes',
         y='Farola',
-        title=f'Hurtos de Luminarias por Mes',
-        labels={'Farola': 'Número de Hurtos', 'Mes': 'Mes del Año'},
-        color='AÑO',  # Color por año
-        barmode='group',  # Agrupa las barras por año
-        color_discrete_sequence=px.colors.qualitative.Plotly  # Colores discretos
+        title='Hurtos de Luminarias por Mes',
+        color='AÑO',
+        barmode='group'
     )
-    # Quitar la leyenda del gráfico de barras
-    bar_fig.update_layout(showlegend=True, legend_title_text='Año')
-
-    # Mapa de hurtos usando go.Scattermapbox
+    
+    # Mapa - Correcciones importantes:
     map_fig = go.Figure()
-
-    # Añadir un trace por cada año seleccionado
-    for year in selected_years:
-        year_df = filtered_df[filtered_df['AÑO'] == year]
-        map_fig.add_trace(go.Scattermapbox(
-            lat=year_df['Latitud'],
-            lon=year_df['Longitud'],
-            mode='markers',
-            marker=dict(size=10, color=px.colors.qualitative.Plotly[selected_years.index(year)]),
-            name=str(year),  # Nombre de la leyenda
-            hovertext=year_df['Farola'],  # Texto al pasar el mouse
-            hoverinfo='text'
-        ))
-
-    # Configuración del mapa
+    
+    # Verifica que las columnas de coordenadas existan
+    if 'Latitud' in filtered_df.columns and 'Longitud' in filtered_df.columns:
+        for year in selected_years:
+            year_df = filtered_df[filtered_df['AÑO'] == year]
+            
+            # Filtra valores NaN en coordenadas
+            valid_coords = year_df.dropna(subset=['Latitud', 'Longitud'])
+            
+            map_fig.add_trace(go.Scattermapbox(
+                lat=valid_coords['Latitud'],
+                lon=valid_coords['Longitud'],
+                mode='markers',
+                marker=dict(
+                    size=10,
+                    color=px.colors.qualitative.Plotly[selected_years.index(year) % len(px.colors.qualitative.Plotly)]
+                ),
+                name=str(year),
+                hovertext=valid_coords['Farola']
+            ))
+    
+    # Configuración mejorada del mapa
     map_fig.update_layout(
         mapbox=dict(
             style="open-street-map",
-            center=dict(lat=filtered_df['Latitud'].mean(), lon=filtered_df['Longitud'].mean()),
-            zoom=12
+            center=dict(
+                lat=filtered_df['Latitud'].mean() if not filtered_df['Latitud'].isnull().all() else 4.6097,
+                lon=filtered_df['Longitud'].mean() if not filtered_df['Longitud'].isnull().all() else -74.0817
+            ),
+            zoom=10
         ),
         margin={"r": 0, "t": 30, "l": 0, "b": 0},
-        legend_title_text='Año',
-        height=600  # Altura del mapa
+        height=600
     )
-
+    
     return bar_fig, map_fig
 
-# Ejecutar la aplicación
 if __name__ == '__main__':
     app.run_server(debug=True)
