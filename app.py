@@ -109,5 +109,7 @@ def update_graphs(selected_years):
     
     return bar_fig, map_fig
 
+server = app.server
+
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=False)
